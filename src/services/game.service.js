@@ -1,63 +1,62 @@
 const Session = require("../models/session.model");
-const User = require("../models/user.model");
-const sessionService = require("./session.service");
 
-exports.handleGuess = async ({ sessionId, userId, guess, io }) => {
+/* HANDLE GUESS */
+const handleGuess = async function (sessionId, userId, guess) {
   const session = await Session.findById(sessionId);
 
-  if (!session || session.status !== "in-progress")
-    return { message: "Game not active" };
+  if (!session) return null;
 
-  const attempts = session.attempts.get(userId) || 0;
+  if (session.status !== "active") return { message: "Game not active" };
 
-  if (attempts >= 3) return { message: "No attempts left" };
+  const player = session.players.find(p => p.id === userId);
 
-  session.attempts.set(userId, attempts + 1);
+  if (!player) return { message: "Player not found" };
 
-  if (guess.toLowerCase() === session.answer.toLowerCase()) {
+  if (player.attempts <= 0) {
+    return { message: "No attempts left" };
+  }
+
+  player.attempts -= 1;
+
+  /* WIN CONDITION */
+  if (guess === session.answer) {
     session.status = "ended";
-    session.winner = userId;
 
-    await User.findByIdAndUpdate(userId, {
-      $inc: { score: 10 },
-    });
+    player.score += 10;
 
     await session.save();
 
-    const users = await User.find({
-      _id: { $in: session.players },
-    });
-
-    io.to(sessionId).emit("game_ended", {
+    return {
       winner: userId,
-      answer: session.answer,
-    });
-
-    io.to(sessionId).emit("score_update", users);
-
-    await sessionService.rotateGameMaster(sessionId);
-
-    return { message: "Correct 🎉" };
+      answer: session.answer
+    };
   }
 
   await session.save();
-  return { message: "Wrong ❌" };
+
+  return {
+    message: "Wrong answer",
+    attemptsLeft: player.attempts
+  };
 };
 
-exports.endByTimeout = async (sessionId, io) => {
+/* END GAME ON TIMEOUT */
+const endGame = async function (sessionId) {
   const session = await Session.findById(sessionId);
 
-  if (!session || session.status !== "in-progress") return;
+  if (!session) return;
 
   session.status = "ended";
+
   await session.save();
 
-  io.to(sessionId).emit("game_ended", {
-    winner: null,
+  return {
     answer: session.answer,
-  });
-
-  await sessionService.rotateGameMaster(sessionId);
+    winner: null
+  };
 };
 
-   
+module.exports = {
+  handleGuess,
+  endGame
+};

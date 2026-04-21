@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Guessing Game</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0b1220;
+  color: white;
+}
+
+.container {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 250px;
+  background: #111a2e;
+  padding: 10px;
+}
+
+.chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  padding: 10px;
+  background: #111a2e;
+  display: flex;
+  justify-content: space-between;
+}
+
+.messages {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.msg {
+  padding: 8px;
+  margin: 5px 0;
+  background: #1a2742;
+  border-radius: 6px;
+}
+
+.me {
+  background: #4f9cff;
+}
+
+.controls {
+  padding: 10px;
+  background: #111a2e;
+}
+
+input {
+  padding: 6px;
+  margin: 3px;
+}
+
+button {
+  padding: 6px;
+  margin: 3px;
+  background: #4f9cff;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.timer {
+  color: red;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="sidebar">
+    <h3>Players</h3>
+    <div id="players"></div>
+  </div>
+
+  <div class="chat">
+
+    <div class="header">
+      <div>🎮 Guessing Game</div>
+      <div id="timer">60</div>
+    </div>
+
+    <div class="controls">
+      <input id="userId" placeholder="User ID" />
+      <input id="sessionId" placeholder="Session ID" />
+
+      <button onclick="createSession()">Create</button>
+      <button onclick="joinSession()">Join</button>
+
+      <br><br>
+
+      <input id="question" placeholder="Question" />
+      <input id="answer" placeholder="Answer" />
+      <button onclick="startGame()">Start Game</button>
+    </div>
+
+    <div id="messages" class="messages"></div>
+
+    <div class="controls">
+      <input id="guess" placeholder="Guess answer" />
+      <button onclick="sendGuess()">Send</button>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+
+const BASE = "http://localhost:5000";
+
+let socket = null;
+let currentSession = null;
+
+/* ---------------- SAFE UI ---------------- */
+
+function addMessage(text, me = false) {
+  const div = document.createElement("div");
+  div.className = "msg " + (me ? "me" : "");
+  div.innerText = text;
+
+  document.getElementById("messages").appendChild(div);
+}
+
+/* ---------------- SAFE API ---------------- */
+
+async function safePost(url, body) {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.message || "Request failed");
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    alert("Network error");
+    return null;
+  }
+}
+
+/* ---------------- SESSION SAFE SET ---------------- */
+
+function setSession(session) {
+  if (!session) return null;
+
+  const id = session._id || session.session?._id;
+
+  if (!id) {
+    console.log("Invalid session:", session);
+    return null;
+  }
+
+  currentSession = id;
+  document.getElementById("sessionId").value = id;
+
+  return id;
+}
+
+/* ---------------- CREATE SESSION ---------------- */
+
+async function createSession() {
+  const userId = document.getElementById("userId").value;
+  if (!userId) return alert("Enter userId");
+
+  const data = await safePost(BASE + "/api/sessions", {
+    userId
+  });
+
+  const id = setSession(data);
+  if (!id) return;
+
+  addMessage("Session created ✔", true);
+
+  connectSocket();
+}
+
+/* ---------------- JOIN SESSION ---------------- */
+
+async function joinSession() {
+  const userId = document.getElementById("userId").value;
+  const sessionId = document.getElementById("sessionId").value;
+
+  if (!userId || !sessionId) return alert("Missing fields");
+
+  const data = await safePost(
+    BASE + "/api/sessions/" + sessionId + "/join",
+    { userId }
+  );
+
+  const id = setSession(data || { _id: sessionId });
+  if (!id) return;
+
+  addMessage("Joined session ✔", true);
+
+  connectSocket();
+}
+
+/* ---------------- SOCKET ---------------- */
+
+function connectSocket() {
+  if (!currentSession) return;
+
+  if (socket) socket.disconnect();
+
+  socket = io(BASE, {
+    transports: ["websocket"]
+  });
+
+  socket.on("connect", () => {
+    socket.emit("join_session", {
+      sessionId: currentSession
+    });
+  });
+
+  socket.on("game_started", (data) => {
+    addMessage("Question: " + (data?.question || ""));
+  });
+
+  socket.on("message", (msg) => {
+    addMessage(msg || "");
+  });
+
+  socket.on("time_update", (data) => {
+    document.getElementById("timer").innerText =
+      (data?.timeLeft ?? 0) + "s";
+  });
+
+  socket.on("game_ended", (data) => {
+    if (data?.winner) {
+      addMessage("🏆 Winner: " + data.winner);
+    } else {
+      addMessage("⏰ Time up!");
+    }
+
+    addMessage("Answer: " + (data?.answer || ""));
+  });
+}
+
+/* ---------------- GAME ---------------- */
+
+function startGame() {
+  if (!socket || !currentSession) return;
+
+  socket.emit("start_game", {
+    sessionId: currentSession,
+    question: document.getElementById("question").value,
+    answer: document.getElementById("answer").value
+  });
+
+  addMessage("Game started", true);
+}
+
+/* ---------------- GUESS ---------------- */
+
+function sendGuess() {
+  if (!socket || !currentSession) return;
+
+  socket.emit("guess", {
+    sessionId: currentSession,
+    userId: document.getElementById("userId").value,
+    guess: document.getElementById("guess").value
+  });
+
+  addMessage("You: " + document.getElementById("guess").value, true);
+}
+
+</script>
+
+</body>
+</html>

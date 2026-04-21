@@ -1,25 +1,32 @@
 require("dotenv").config();
 
 const http = require("http");
-const { Server } = require("socket.io");
-
 const app = require("./app");
-const connectDB = require("./config/db");
-const socketConfig = require("./config/socket");
-
-connectDB();
+const socketIO = require("socket.io");
+const mongoose = require("mongoose");
 
 const server = http.createServer(app);
 
-const io = new Server(server, {
-  cors: { origin: "*" },
+const io = socketIO(server, {
+  cors: {
+    origin: "*"
+  }
 });
 
-// 👇 make io available in controllers
-app.set("io", io);
+require("./sockets/game.socket")(io);
 
-socketConfig(io);
+const PORT = process.env.PORT || 5000;
 
-server.listen(process.env.PORT, () => {
-  console.log("Server running");
-});
+/* ✅ CONNECT DB FIRST */
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(function () {
+    console.log("MongoDB connected ✔");
+
+    server.listen(PORT, function () {
+      console.log("Server running on port " + PORT);
+    });
+  })
+  .catch(function (err) {
+    console.log("MongoDB connection error:", err.message);
+  });

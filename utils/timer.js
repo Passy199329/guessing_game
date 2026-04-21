@@ -1,1 +1,0 @@
-module.exports = (ms, cb) => setTimeout(cb, ms);

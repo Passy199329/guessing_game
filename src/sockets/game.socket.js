@@ -1,36 +1,49 @@
 const gameService = require("../services/game.service");
-const Session = require("../models/session.model");
+const timer = require("../utils/timer");
 
-module.exports = (io, socket) => {
+module.exports = function (io) {
 
-  socket.on("join_session", async ({ sessionId, userId }) => {
-    const session = await Session.findById(sessionId);
+  io.on("connection", function (socket) {
 
-    if (!session || session.status !== "waiting") {
-      return socket.emit("error", "Cannot join");
-    }
+    socket.on("join_session", function (data) {
+      socket.join(data.sessionId);
 
-    socket.join(sessionId);
-
-    io.to(sessionId).emit("player_joined", {
-      userId,
-      totalPlayers: session.players.length,
-    });
-  });
-
-  socket.on("send_message", ({ sessionId, userId, message }) => {
-    io.to(sessionId).emit("receive_message", {
-      userId,
-      message,
-    });
-  });
-
-  socket.on("send_guess", async (data) => {
-    const result = await gameService.handleGuess({
-      ...data,
-      io,
+      io.to(data.sessionId).emit("message", "Player joined");
     });
 
-    socket.emit("guess_result", result);
+    socket.on("start_game", async function (data) {
+
+      io.to(data.sessionId).emit("game_started", {
+        question: data.question
+      });
+
+      timer.startTimer(
+        data.sessionId,
+        60,
+        io,
+        async function () {
+          const result = await gameService.endGame(data.sessionId);
+
+          io.to(data.sessionId).emit("game_ended", result);
+        }
+      );
+    });
+
+    socket.on("guess", async function (data) {
+
+      const result = await gameService.handleGuess(
+        data.sessionId,
+        data.userId,
+        data.guess
+      );
+
+      io.to(data.sessionId).emit("message", result.message || "Guess received");
+
+      if (result.winner) {
+        io.to(data.sessionId).emit("game_ended", result);
+      }
+    });
+
   });
+
 };

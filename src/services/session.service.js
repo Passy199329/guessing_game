@@ -1,73 +1,61 @@
 const Session = require("../models/session.model");
-const gameService = require("./game.service");
 
-const timers = new Map();
-
-const createSession = async (userId) => {
+/* CREATE SESSION */
+const createSession = async function (userId) {
   return await Session.create({
-    players: [userId],
+    players: [
+      {
+        id: userId,
+        score: 0,
+        attempts: 3
+      }
+    ],
     gameMaster: userId,
+    status: "waiting"
   });
 };
 
-const joinSession = async (sessionId, userId) => {
+/* JOIN SESSION (BLOCK IF ACTIVE) */
+const joinSession = async function (sessionId, userId) {
   const session = await Session.findById(sessionId);
 
   if (!session) throw new Error("Session not found");
-  if (session.status !== "waiting") throw new Error("Game started");
 
-  if (!session.players.includes(userId)) {
-    session.players.push(userId);
+  if (session.status === "active") {
+    throw new Error("Game already started");
   }
 
-  await session.save();
-  return session;
+  const exists = session.players.find(p => p.id === userId);
+  if (exists) return session;
+
+  session.players.push({
+    id: userId,
+    score: 0,
+    attempts: 3
+  });
+
+  return await session.save();
 };
 
-const startGame = async ({ sessionId, question, answer, io }) => {
+/* START GAME (ONLY GAME MASTER + MIN 2 PLAYERS) */
+const startGame = async function (sessionId, question, answer) {
   const session = await Session.findById(sessionId);
 
-  if (session.players.length < 3)
-    throw new Error("Minimum 3 players");
+  if (!session) throw new Error("Session not found");
 
-  session.status = "in-progress";
+  if (session.players.length < 2) {
+    throw new Error("Need at least 2 players");
+  }
+
+  session.status = "active";
   session.question = question;
   session.answer = answer;
-  session.attempts = new Map();
 
-  session.players.forEach((p) =>
-    session.attempts.set(p.toString(), 0)
-  );
-
-  await session.save();
-
-  io.to(sessionId).emit("game_started", { question });
-
-  const timer = setTimeout(async () => {
-    await gameService.endByTimeout(sessionId, io);
-  }, 60000);
-
-  timers.set(sessionId, timer);
-
-  return session;
-};
-
-const rotateGameMaster = async (sessionId) => {
-  const session = await Session.findById(sessionId);
-
-  const i = session.players.findIndex(
-    (p) => p.toString() === session.gameMaster.toString()
-  );
-
-  session.gameMaster =
-    session.players[(i + 1) % session.players.length];
-
-  await session.save();
+  return await session.save();
 };
 
 module.exports = {
   createSession,
   joinSession,
-  startGame,
-  rotateGameMaster,
+  startGame
 };

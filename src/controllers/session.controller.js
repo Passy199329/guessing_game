@@ -1,35 +1,27 @@
 const sessionService = require("../services/session.service");
 
-exports.createSession = async (req, res, next) => {
+const createSession = async function (req, res) {
   try {
-    const data = await sessionService.createSession(req.user.id);
-    res.json(data);
-  } catch (error) {
-    next(error);
+    const session = await sessionService.createSession(req.body.userId);
+    res.json(session);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
-exports.joinSession = async (req, res, next) => {
+const joinSession = async function (req, res) {
   try {
-    const data = await sessionService.joinSession(
+    const session = await sessionService.joinSession(
       req.params.id,
-      req.user.id
+      req.body.userId
     );
-    res.json(data);
-  } catch (error) {
-    next(error);
+    res.json(session);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 };
 
-exports.startGame = async (req, res, next) => {
-  try {
-    const data = await sessionService.startGame({
-      ...req.body,
-      io: req.app.get("io"),
-    });
-
-    res.json(data);
-  } catch (error) {
-    next(error);
-  }
+module.exports = {
+  createSession: createSession,
+  joinSession: joinSession
 };
