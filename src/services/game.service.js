@@ -1,62 +1,74 @@
-const Session = require("../models/session.model");
+const Session = require('../models/session.model');
 
-/* HANDLE GUESS */
-const handleGuess = async function (sessionId, userId, guess) {
-  const session = await Session.findById(sessionId);
+/**
+ * Set the question and answer for a session
+ */
+const setQuestion = async (session, question, answer) => {
+  session.question = question.trim();
+  session.answer = answer.trim().toLowerCase();
+  await session.save();
+  return session;
+};
 
-  if (!session) return null;
+/**
+ * Start the game session
+ */
+const startGame = async (session) => {
+  session.players.forEach(p => {
+    p.attempts = 0;
+    p.hasGuessedCorrectly = false;
+  });
+  session.status = 'active';
+  session.winner = null;
+  session.startedAt = new Date();
+  await session.save();
+  return session;
+};
 
-  if (session.status !== "active") return { message: "Game not active" };
+/**
+ * Process a player's guess
+ * @returns {{ correct: boolean, attemptsLeft: number, allOut: boolean }}
+ */
+const processGuess = async (session, socketId, guess) => {
+  const player = session.players.find(p => p.socketId === socketId);
+  if (!player) throw new Error('Player not found');
+  if (player.isGameMaster) throw new Error('Game master cannot guess');
+  if (player.hasGuessedCorrectly) throw new Error('You already guessed correctly');
+  if (player.attempts >= 3) throw new Error('No attempts remaining');
 
-  const player = session.players.find(p => p.id === userId);
+  player.attempts += 1;
+  const correct = guess.trim().toLowerCase() === session.answer;
 
-  if (!player) return { message: "Player not found" };
-
-  if (player.attempts <= 0) {
-    return { message: "No attempts left" };
-  }
-
-  player.attempts -= 1;
-
-  /* WIN CONDITION */
-  if (guess === session.answer) {
-    session.status = "ended";
-
+  if (correct) {
+    player.hasGuessedCorrectly = true;
     player.score += 10;
-
-    await session.save();
-
-    return {
-      winner: userId,
-      answer: session.answer
-    };
+    session.winner = player.username;
+    session.status = 'ended';
+    session.endedAt = new Date();
   }
 
   await session.save();
 
+  // Check if all non-master players are out
+  const activePlayers = session.players.filter(p => !p.isGameMaster);
+  const allOut = activePlayers.every(p => p.attempts >= 3 || p.hasGuessedCorrectly);
+
   return {
-    message: "Wrong answer",
-    attemptsLeft: player.attempts
+    correct,
+    player,
+    attemptsLeft: 3 - player.attempts,
+    allOut: !correct && allOut,
   };
 };
 
-/* END GAME ON TIMEOUT */
-const endGame = async function (sessionId) {
-  const session = await Session.findById(sessionId);
-
-  if (!session) return;
-
-  session.status = "ended";
-
+/**
+ * End the game session (timeout or all out)
+ */
+const endGame = async (session) => {
+  session.status = 'ended';
+  session.endedAt = new Date();
   await session.save();
-
-  return {
-    answer: session.answer,
-    winner: null
-  };
+  return session;
 };
 
-module.exports = {
-  handleGuess,
-  endGame
-};
+module.exports = { setQuestion, startGame, processGuess, endGame };

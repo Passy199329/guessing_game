@@ -1,35 +1,48 @@
-const timers = new Map();
+const activeTimers = {};
 
-const startTimer = function (sessionId, duration, io, onEnd) {
-  let timeLeft = duration;
+/**
+ * Start a countdown timer for a session
+ * @param {string} code - Session code
+ * @param {number} seconds - Duration in seconds
+ * @param {function} onTick - Called every second with timeLeft
+ * @param {function} onExpire - Called when timer reaches 0
+ */
+const startTimer = (code, seconds, onTick, onExpire) => {
+  stopTimer(code); // clear any existing timer
 
-  const interval = setInterval(function () {
+  let timeLeft = seconds;
+
+  activeTimers[code] = setInterval(() => {
     timeLeft--;
-
-    io.to(sessionId).emit("time_update", {
-      timeLeft
-    });
+    if (onTick) onTick(timeLeft);
 
     if (timeLeft <= 0) {
-      clearInterval(interval);
-
-      io.to(sessionId).emit("time_up");
-
-      if (onEnd) onEnd();
+      stopTimer(code);
+      if (onExpire) onExpire();
     }
   }, 1000);
-
-  timers.set(sessionId, interval);
 };
 
-const stopTimer = function (sessionId) {
-  if (timers.has(sessionId)) {
-    clearInterval(timers.get(sessionId));
-    timers.delete(sessionId);
+/**
+ * Stop and clear a session timer
+ * @param {string} code - Session code
+ */
+const stopTimer = (code) => {
+  if (activeTimers[code]) {
+    clearInterval(activeTimers[code]);
+    delete activeTimers[code];
   }
 };
 
-module.exports = {
-  startTimer,
-  stopTimer
+/**
+ * Format seconds into MM:SS
+ * @param {number} seconds
+ * @returns {string}
+ */
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 };
+
+module.exports = { startTimer, stopTimer, formatTime };
