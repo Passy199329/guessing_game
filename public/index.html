@@ -543,7 +543,6 @@
       myUsername = username;
       sessionCode = data.code;
       isGameMaster = true;
-      enterGame(data.session);
       socket.emit('join_session', { code: sessionCode, username });
     } catch (e) {
       showToast('Failed to create session', 'error');
@@ -566,7 +565,6 @@
       myUsername = username;
       sessionCode = code;
       isGameMaster = false;
-      enterGame(data);
       socket.emit('join_session', { code, username });
     } catch (e) {
       showToast('Failed to join session', 'error');
@@ -701,8 +699,14 @@
 
   // ── Socket events ──────────────────────────────────────────────
   socket.on('joined', ({ session }) => {
+    document.getElementById('sessionCode').textContent = sessionCode;
+    showScreen('game');
     updatePlayers(session.players);
     updateStatus(session.status);
+    if (isGameMaster) {
+      document.getElementById('masterControls').style.display = 'flex';
+    }
+    addMessage({ type: 'system', message: `Welcome to session ${sessionCode}! Share this code with your friends.` });
   });
 
   socket.on('player_update', ({ players, message }) => {
