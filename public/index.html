@@ -416,7 +416,44 @@
     #toast.info { background: #0d1a2a; border: 1px solid var(--system); color: var(--system); }
 
     @media (max-width: 600px) {
-      .sidebar { width: 200px; }
+      #game { flex-direction: column; }
+
+      .sidebar {
+        width: 100%;
+        max-height: 180px;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        flex-direction: row;
+        overflow-x: auto;
+      }
+
+      .sidebar-header {
+        min-width: 140px;
+        border-bottom: none;
+        border-right: 1px solid var(--border);
+        padding: 12px;
+      }
+
+      .players-section {
+        min-width: 160px;
+        padding: 12px;
+        border-right: 1px solid var(--border);
+      }
+
+      .game-controls {
+        min-width: 220px;
+        padding: 12px;
+        border-top: none;
+      }
+
+      .game-controls textarea { height: 44px; font-size: 12px; }
+      .ctrl-btn { font-size: 12px; padding: 8px; }
+
+      .chat-area { flex: 1; min-height: 0; }
+
+      .timer-display { font-size: 20px; }
+
+      .session-code span { font-size: 14px; letter-spacing: 2px; }
     }
   </style>
 </head>
@@ -630,11 +667,14 @@
     const answer = document.getElementById('answerInput').value.trim();
     if (!question) return showToast('Enter a question', 'error');
     if (!answer) return showToast('Enter the answer', 'error');
+    console.log('Emitting set_question', { code: sessionCode, question, answer });
     socket.emit('set_question', { code: sessionCode, question, answer });
   }
 
   // ── Start game (game master) ───────────────────────────────────
   function startGame() {
+    console.log('Emitting start_game', { code: sessionCode });
+    if (!sessionCode) return showToast('No active session', 'error');
     socket.emit('start_game', { code: sessionCode });
   }
 
