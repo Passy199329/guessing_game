@@ -415,47 +415,57 @@
     #toast.success { background: #0d2419; border: 1px solid var(--green); color: var(--green); }
     #toast.info { background: #0d1a2a; border: 1px solid var(--system); color: var(--system); }
 
+    /* Toggle button - mobile only */
+    .toggle-btn {
+      display: none;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
     @media (max-width: 600px) {
       body { overflow: hidden; }
-      #game { flex-direction: column; height: 100vh; overflow: hidden; }
+      #game { flex-direction: column; height: 100dvh; }
 
-      /* Sidebar becomes a compact top bar */
+      .toggle-btn { display: block; }
+
+      /* Sidebar compact top bar */
       .sidebar {
         width: 100%;
-        height: auto;
         border-right: none;
         border-bottom: 1px solid var(--border);
-        flex-direction: column;
         flex-shrink: 0;
+        flex-direction: column;
       }
 
       .sidebar-header { padding: 8px 14px; }
-      .session-code span { font-size: 13px; letter-spacing: 2px; }
-      .status-badge { font-size: 10px; padding: 2px 8px; }
+      .session-code span { font-size: 13px; }
+      .status-badge { font-size: 10px; padding: 2px 8px; margin-top: 3px; }
 
-      /* Collapse players list on mobile */
-      .players-section {
-        padding: 6px 14px;
-        max-height: 80px;
-        overflow-y: auto;
+      /* Collapsible content */
+      .sidebar-content {
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        max-height: 300px;
       }
 
-      .player-item { padding: 4px 0; }
-      .player-avatar { width: 26px; height: 26px; font-size: 11px; }
+      .sidebar-content.collapsed { max-height: 0; }
+
+      .players-section { padding: 6px 14px; max-height: 80px; overflow-y: auto; }
+      .player-item { padding: 3px 0; }
+      .player-avatar { width: 24px; height: 24px; font-size: 10px; }
       .player-name { font-size: 12px; }
       .player-score { font-size: 10px; }
 
-      /* Game controls compact */
-      .game-controls {
-        padding: 8px 14px;
-        gap: 6px;
-        border-top: 1px solid var(--border);
-      }
-
-      .game-controls textarea { height: 36px; font-size: 12px; padding: 8px 10px; }
+      .game-controls { padding: 8px 14px; gap: 5px; border-top: 1px solid var(--border); }
+      .game-controls textarea { height: 34px; font-size: 12px; padding: 6px 10px; }
       .ctrl-btn { font-size: 12px; padding: 7px; }
 
-      /* Chat takes remaining space */
+      /* Chat takes all remaining space */
       .chat-area {
         flex: 1;
         display: flex;
@@ -464,45 +474,37 @@
         overflow: hidden;
       }
 
-      .chat-header { padding: 8px 14px; }
+      .chat-header { padding: 8px 14px; flex-shrink: 0; }
       .chat-title { font-size: 13px; }
-      .chat-subtitle { font-size: 11px; }
-      .timer-display { font-size: 22px; }
+      .chat-subtitle { font-size: 10px; }
+      .timer-display { font-size: 20px; }
 
-      /* Messages scroll area */
       .messages {
         flex: 1;
         overflow-y: auto;
-        padding: 10px 14px;
+        padding: 10px 12px;
         -webkit-overflow-scrolling: touch;
       }
 
-      /* Attempts bar */
-      .attempts-bar { padding: 6px 14px; }
+      .attempts-bar { padding: 5px 14px; flex-shrink: 0; }
 
-      /* Chat input - LARGE and prominent on mobile */
+      /* Chat input pinned and prominent */
       .chat-input-area {
-        padding: 10px 14px;
+        flex-shrink: 0;
+        padding: 10px 12px;
         padding-bottom: max(10px, env(safe-area-inset-bottom));
         gap: 8px;
         background: var(--surface);
         border-top: 2px solid var(--accent);
-        flex-shrink: 0;
       }
 
       .chat-input-area input {
-        font-size: 16px; /* prevents iOS zoom */
-        padding: 12px 16px;
-        border-radius: 24px;
-        border: 1px solid var(--accent);
+        font-size: 16px;
+        padding: 11px 16px;
+        border: 1.5px solid var(--accent);
       }
 
-      .send-btn {
-        width: 48px;
-        height: 48px;
-        font-size: 20px;
-        flex-shrink: 0;
-      }
+      .send-btn { width: 46px; height: 46px; font-size: 20px; flex-shrink: 0; }
     }
   </style>
 </head>
@@ -538,23 +540,30 @@
 <!-- ── Game Screen ── -->
 <div id="game" class="screen">
   <!-- Sidebar -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="session-code">Session <span id="sessionCode">------</span></div>
-      <div id="statusBadge" class="status-badge status-waiting">⏳ Waiting</div>
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <div class="session-code">Session <span id="sessionCode">------</span></div>
+          <div id="statusBadge" class="status-badge status-waiting">⏳ Waiting</div>
+        </div>
+        <button class="toggle-btn" id="toggleSidebar" onclick="toggleSidebar()">▲</button>
+      </div>
     </div>
 
-    <div class="players-section">
-      <div class="players-title">Players</div>
-      <div id="playersList"></div>
-    </div>
+    <div class="sidebar-content" id="sidebarContent">
+      <div class="players-section">
+        <div class="players-title">Players</div>
+        <div id="playersList"></div>
+      </div>
 
-    <!-- Game master controls -->
-    <div class="game-controls" id="masterControls" style="display:none">
-      <textarea id="questionInput" placeholder="Type your question..."></textarea>
-      <textarea id="answerInput" placeholder="The answer (hidden from players)..." style="height:44px"></textarea>
-      <button class="ctrl-btn ctrl-btn-accent" id="setQuestionBtn" onclick="setQuestion()">📝 Set Question</button>
-      <button class="ctrl-btn ctrl-btn-green" id="startBtn" onclick="startGame()" disabled>▶ Start Game</button>
+      <!-- Game master controls -->
+      <div class="game-controls" id="masterControls" style="display:none">
+        <textarea id="questionInput" placeholder="Type your question..."></textarea>
+        <textarea id="answerInput" placeholder="The answer (hidden from players)..." style="height:44px"></textarea>
+        <button class="ctrl-btn ctrl-btn-accent" id="setQuestionBtn" onclick="setQuestion()">📝 Set Question</button>
+        <button class="ctrl-btn ctrl-btn-green" id="startBtn" onclick="startGame()" disabled>▶ Start Game</button>
+      </div>
     </div>
   </div>
 
@@ -891,6 +900,13 @@
 
   function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function toggleSidebar() {
+    const content = document.getElementById('sidebarContent');
+    const btn = document.getElementById('toggleSidebar');
+    content.classList.toggle('collapsed');
+    btn.textContent = content.classList.contains('collapsed') ? '▼' : '▲';
   }
 </script>
 </body>
