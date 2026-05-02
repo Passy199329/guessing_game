@@ -41,7 +41,6 @@ src/
 ├── models/
 ├── routes/
 ├── services/
-├── middlewares/
 ├── sockets/
 ├── utils/
 ├── app.js
@@ -147,13 +146,7 @@ The API can be tested using **Postman**, and real-time features can be tested vi
 
 ---
 
-## 📌 Notes
 
-* Input validation is implemented
-* Middleware is used for request handling
-* Designed to focus on functionality rather than UI
-
----
 
 ## 👨‍💻 Author
 
